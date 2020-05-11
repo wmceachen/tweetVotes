@@ -1,0 +1,3 @@
+#!/home/wdm/src/tweetVotes/env/bin/python3
+from numba.pycc import main
+main()
