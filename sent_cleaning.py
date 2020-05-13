@@ -12,6 +12,9 @@ pd.read_csv('sent/Subtask_A/livejournal-2014test-A.tsv', sep='\t', header=None)]
 df1 = df1.rename(columns = {2:'sent', 3:'tweet'})[['sent','tweet']]
 df = pd.concat([df, df1])
 df.replace({'neutral': 0, 'positive': 1, 'negative':-1}, inplace=True)
-tknzr = TweetTokenizer()
-df.tweet = df.tweet.swifter.apply(lambda tweet: tknzr.tokenize(clean_text(tweet)))
-df.to_csv('sent/trinary_tweets.csv', index=False)
+from pycontractions import Contractions
+cont = Contractions(api_key="word2vec-google-news-300")
+print(list(cont.expand_texts(df.tweet, precise=True)))
+# tknzr = TweetTokenizer()
+# df.tweet = df.tweet.swifter.apply(lambda tweet: tknzr.tokenize(clean_text(tweet)))
+# df.to_csv('sent/trinary_tweets.csv', index=False)
