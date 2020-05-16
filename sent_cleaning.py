@@ -46,5 +46,7 @@ def cleaning(tweet):
 
 
 df.tweet = parallelize_series(df.tweet, cleaning)
+df = df[(df.tweet.str.split().apply(len) > 4) &
+        (df.tweet.str.split().apply(len) < 50)]
 df.to_csv('sent/trinary_tweets.csv', index=False)
 print(df)
