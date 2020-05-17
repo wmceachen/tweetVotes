@@ -37,7 +37,7 @@ df1 = pd.concat([pd.read_csv('sent/Subtask_A/sms-2013test-A.tsv', sep='\t', head
                  pd.read_csv('sent/Subtask_A/livejournal-2014test-A.tsv', sep='\t', header=None)])
 df1 = df1.rename(columns={2: 'sent', 3: 'tweet'})[['sent', 'tweet']]
 df = pd.concat([df, df1]).reset_index(drop=True)
-df.replace({'neutral': 1, 'negative': 1, 'positive': 2}, inplace=True)
+df.replace({'neutral': 0, 'negative': -1, 'positive': 1}, inplace=True)
 tknzr = TweetTokenizer()
 
 
