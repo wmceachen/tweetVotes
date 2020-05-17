@@ -7,9 +7,10 @@ from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import OneHotEncoder
 import numpy as np
 from tensorflow.keras.layers.experimental.preprocessing import TextVectorization
-from imblearn.over_sampling import SMOTE 
+from imblearn.over_sampling import SMOTE
+import pickle
 # print(tf.test.is_gpu_available())
-enc = OneHotEncoder(handle_unknown='ignore', sparse=False)
+# enc = OneHotEncoder(handle_unknown='ignore', sparse=False)
 sm = SMOTE(random_state=42)
 
 df = pd.read_csv('sent/trinary_tweets.csv')
@@ -37,7 +38,6 @@ X_train, X_test, y_train, y_test = train_test_split(
 
 X_train, X_val, y_train, y_val = train_test_split(
     X_train, y_train, test_size=0.25, random_state=42)
-
 
 
 vocab = vectorizer.get_vocabulary()
@@ -91,20 +91,19 @@ def conv_model(embedding_matrix, text_len, vocab_size):
     return model
 
 
-
 my_callbacks = [
     ks.callbacks.EarlyStopping(
         monitor='val_accuracy', patience=5, restore_best_weights=True),
     ks.callbacks.ModelCheckpoint(
-        filepath='model.{epoch:02d}-{val_loss:.2f}.h5', monitor='val_acc', save_best_only=True),
-    ks.callbacks.TensorBoard(log_dir='./logs')
-]
+        filepath='models/conv_model.{epoch:02d}-{val_acc:.2f}.h5', monitor='val_accuracy', save_best_only=True)
+]#,ks.callbacks.TensorBoard(log_dir='./logs')
 embedding_matrix = word2vec_matrix_gen(word_index, num_tokens, embedding_dim)
 model = conv_model(embedding_matrix, MAX_SEQ_LEN, num_tokens)
 
 model.compile(
-    loss="binary_crossentropy", optimizer="adam", metrics=['accuracy']
+    loss="binary_crossentropy", optimizer="adam", metrics=['acc']
 )
 model.fit(X_train, y_train, batch_size=32,
           epochs=20, validation_data=(X_val, y_val), callbacks=my_callbacks)
+pickle.dump(vectorizer, open("models/conv_vector.pickel", "wb"))
 # print(accuracy_score(y_test, model.predict(X_test)))
