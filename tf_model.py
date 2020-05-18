@@ -7,9 +7,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import OneHotEncoder
 import numpy as np
+from imblearn.over_sampling import SMOTE
 from tensorflow.keras.layers.experimental.preprocessing import TextVectorization
-import pickle
-
 # print(tf.test.is_gpu_available())
 
 
@@ -106,14 +105,13 @@ class TokenAndPositionEmbedding(ks.layers.Layer):
         return x + positions
 
 
-def tf_model(vocab_size, max_seq_len, embed_dim=32, num_heads=2, ff_dim=32):
+def tf_model(text_length, vocab_size, embed_dim=32, num_heads=2, ff_dim=32):
     # embed_dim: Embedding size for each token
     # num_heads: Number of attention heads
     # ff_dim: Hidden layer size in feed forward network inside transformer
-
-    inputs = layers.Input(shape=(max_seq_len,))
+    inputs = layers.Input(shape=(text_length,))
     embedding_layer = TokenAndPositionEmbedding(
-        max_seq_len, vocab_size, embed_dim)
+        text_length, vocab_size, embed_dim)
     x = embedding_layer(inputs)
     transformer_block = TransformerBlock(embed_dim, num_heads, ff_dim)
     x = transformer_block(x)
@@ -128,37 +126,34 @@ def tf_model(vocab_size, max_seq_len, embed_dim=32, num_heads=2, ff_dim=32):
 
 
 if __name__ == "__main__":
-    vocab_size = 20000  # Only consider the top 20k words
-    maxlen = 55  # Only consider the first 200 words of each movie review
-
+    sm = SMOTE(random_state=42)
     df = pd.read_csv('sent/trinary_tweets.csv')
-    df.sent += 1
-    y = np.array(df.sent)
-    # y = np.array(df.sent).reshape(len(df.sent), 1)
-    # enc_y = enc.fit_transform(y)
+    # Remove neutral and re encode negative scores
+    df = df[df.sent != 0].replace({-1: 0})
+    y = df.sent
+    X = df.tweet
+    MAX_SEQ_LEN = 55
+    VOCAB_SIZE = 20000
+    vectorizer = TextVectorization(
+        max_tokens=VOCAB_SIZE, output_sequence_length=MAX_SEQ_LEN)
+    text_ds = tf.data.Dataset.from_tensor_slices(X).batch(128)
+    vectorizer.adapt(text_ds)
+    X_vecs = vectorizer(np.array([[s] for s in X])).numpy()
+    res_X, res_y = sm.fit_resample(X_vecs, y)
 
     X_train, X_test, y_train, y_test = train_test_split(
-        df.tweet, y, test_size=0.2, random_state=1)
+        res_X, res_y, test_size=0.2, random_state=42)
 
     X_train, X_val, y_train, y_val = train_test_split(
-        X_train, y_train, test_size=0.25, random_state=1)
-
-    vectorizer = TextVectorization(
-        max_tokens=vocab_size, output_sequence_length=maxlen)
-    text_ds = tf.data.Dataset.from_tensor_slices(X_train).batch(128)
-    vectorizer.adapt(text_ds)
-    X_train = vectorizer(np.array([[s] for s in X_train])).numpy()
-    X_val = vectorizer(np.array([[s] for s in X_val])).numpy()
-    X_test = vectorizer(np.array([[s] for s in X_test])).numpy()
+        X_train, y_train, test_size=0.25, random_state=42)
 
     vocab = vectorizer.get_vocabulary()
     vocab_size = len(vocab) + 2
+
     my_callbacks = [ks.callbacks.EarlyStopping(
-        monitor='val_accuracy', patience=5, restore_best_weights=True),
-        ks.callbacks.ModelCheckpoint(
-        filepath='models/tf_model.{epoch:02d}-{val_loss:.2f}.h5', monitor='val_accuracy', save_best_only=True)
-    ]
+        monitor='val_loss', patience=5, restore_best_weights=True)]
+    model = tf_model(MAX_SEQ_LEN, vocab_size)
     model.compile("adam", "binary_crossentropy")
-    model.fit(X_train, y_train, batch_size=32, epochs=20,
-              validation_data=(X_val, y_val), callbacks=my_callbacks)
-    pickle.dump(vectorizer, open("models/tf_vector.pickel", "wb"))
+    history = model.fit(
+        X_train, y_train, batch_size=32, epochs=20, validation_data=(X_val, y_val), callbacks=my_callbacks
+    )

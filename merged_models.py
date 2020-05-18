@@ -22,7 +22,7 @@ from utils import embed_matrix_gen
 sm = SMOTE(random_state=42)
 
 df = pd.read_csv('sent/trinary_tweets.csv')
-#Remove neutral and re encode negative scores
+# Remove neutral and re encode negative scores
 df = df[df.sent != 0].replace({-1: 0})
 
 y = df.sent
@@ -37,7 +37,7 @@ text_ds = tf.data.Dataset.from_tensor_slices(X).batch(128)
 vectorizer.adapt(text_ds)
 X_vecs = vectorizer(np.array([[s] for s in X])).numpy()
 
-#Resample for an even distribution
+# Resample for an even distribution
 res_X, res_y = sm.fit_resample(X_vecs, y)
 
 X_train, X_test, y_train, y_test = train_test_split(
@@ -46,27 +46,28 @@ X_train, X_test, y_train, y_test = train_test_split(
 X_train, X_val, y_train, y_val = train_test_split(
     X_train, y_train, test_size=0.25, random_state=42)
 
-#Embedding Stuff
+# Embedding Stuff
 vocab = vectorizer.get_vocabulary()
 word_index = dict(zip(vocab, range(2, len(vocab))))
 num_tokens = len(vocab) + 2
 embedding_dim = 300
 embedding_matrix = embed_matrix_gen(word_index, num_tokens, embedding_dim)
 
-
-
-conv_model = conv_model(embedding_matrix, MAX_SEQ_LEN, num_tokens, embedding_dim)
-lstm_model = lstm_model(embedding_matrix, MAX_SEQ_LEN, num_tokens, embedding_dim)
-# tf_model = tf_model(MAX_SEQ_LEN, num_tokens)
+conv_model = conv_model(embedding_matrix, MAX_SEQ_LEN,
+                        num_tokens, embedding_dim)
+lstm_model = lstm_model(embedding_matrix, MAX_SEQ_LEN,
+                        num_tokens, embedding_dim)
+tf_model = tf_model(MAX_SEQ_LEN, num_tokens)
 # models = [conv_model, lstm_model, tf_model]
-for model_str in ['conv_model', 'lstm_model']:
+for model_str in ['tf_model', 'conv_model', 'lstm_model']:
     model = eval(model_str)
     model_callbacks = [
         ks.callbacks.EarlyStopping(
-            monitor='val_acc', patience=3, restore_best_weights=True),
-        ks.callbacks.ModelCheckpoint(
-            filepath=f'models/{model_str}.h5', monitor='val_acc', save_best_only=True)
+            monitor='val_acc', patience=3, restore_best_weights=True)
     ]
+    if model_str != 'tf_model':
+        model_callbacks.append(ks.callbacks.ModelCheckpoint(
+            filepath=f'models/{model_str}.h5', monitor='val_acc', save_best_only=True))
     model.summary()
     model.compile("adam", "binary_crossentropy", metrics=['acc'])
     model.fit(X_train, y_train, batch_size=32,
