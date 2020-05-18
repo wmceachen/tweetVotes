@@ -9,30 +9,12 @@ from sklearn.preprocessing import OneHotEncoder
 import numpy as np
 from imblearn.over_sampling import SMOTE
 import pickle
-
+from utils import embed_matrix_gen
 from tensorflow.keras.layers.experimental.preprocessing import TextVectorization
 # print(tf.test.is_gpu_available())
 
 
-def word2vec_matrix_gen(word_index, vocab_size, embedding_dim):
-    # Prepare embedding matrix
-    embedding_matrix = np.zeros((vocab_size, embedding_dim))
-    wv = api.load('glove-twitter-100')
-    hits = 0
-    misses = 0
-    for word, i in word_index.items():
-        try:
-            embedding_vector = wv.get_vector(word.decode("utf-8"))
-            embedding_matrix[i] = embedding_vector
-            hits += 1
-        except:
-            misses += 1
-    print("Converted %d words (%d misses)" % (hits, misses))
-
-    return embedding_matrix
-
-
-def lstm_model(embedding_matrix, text_len, vocab_size):
+def lstm_model(embedding_matrix, text_len, vocab_size, embedding_dim):
     l1l2_reg = ks.regularizers.l1_l2(l1=0.01, l2=0.01)
     tweet_input = ks.layers.Input(shape=(text_len,), dtype='int32')
 
@@ -51,6 +33,8 @@ if __name__ == "__main__":
 
     df = pd.read_csv('sent/trinary_tweets.csv')
     df = df[df.sent != 0].replace({-1: 0})
+    y = df.sent
+    X = df.tweet
     MAX_SEQ_LEN = 55
     VOCAB_SIZE = 20000
 
@@ -71,9 +55,9 @@ if __name__ == "__main__":
     word_index = dict(zip(vocab, range(2, len(vocab))))
     num_tokens = len(vocab) + 2
     embedding_dim = 100
-    embedding_matrix = word2vec_matrix_gen(
+    embedding_matrix = embed_matrix_gen(
         word_index, num_tokens, embedding_dim)
-    model = lstm_model(embedding_matrix, MAX_SEQ_LEN, num_tokens)
+    model = lstm_model(embedding_matrix, MAX_SEQ_LEN, num_tokens, embedding_dim)
     model.summary()
     model.compile("adam", "binary_crossentropy")
     my_callbacks = [ks.callbacks.EarlyStopping(

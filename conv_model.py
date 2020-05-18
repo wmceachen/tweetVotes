@@ -1,7 +1,6 @@
 import pandas as pd
 import tensorflow.keras as ks
 import tensorflow as tf
-import gensim.downloader as api
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from sklearn.preprocessing import OneHotEncoder
@@ -9,6 +8,7 @@ import numpy as np
 from tensorflow.keras.layers.experimental.preprocessing import TextVectorization
 from imblearn.over_sampling import SMOTE
 import pickle
+from utils import embed_matrix_gen
 # gpus = tf.config.experimental.list_physical_devices("GPU")
 # tf.config.experimental.set_memory_growth(gpus[0], True)
 # print(tf.test.is_gpu_available())
@@ -20,27 +20,10 @@ import pickle
 
 
 
-def word2vec_matrix_gen(word_index, vocab_size, embedding_dim):
-    # Prepare embedding matrix
-    embedding_matrix = np.zeros((vocab_size, embedding_dim))
-    # wv = api.load('glove-twitter-100')
-    wv = api.load('word2vec-google-news-300')
-
-    hits = 0
-    misses = 0
-    for word, i in word_index.items():
-        try:
-            embedding_vector = wv.get_vector(word.decode("utf-8"))
-            embedding_matrix[i] = embedding_vector
-            hits += 1
-        except:
-            misses += 1
-    print("Converted %d words (%d misses)" % (hits, misses))
-
-    return embedding_matrix
 
 
-def conv_model(embedding_matrix, text_len, vocab_size):
+
+def conv_model(embedding_matrix, text_len, vocab_size, embedding_dim):
     # Given an embedding matrix, return
     tweet_input = ks.layers.Input(shape=(text_len,), dtype='int32')
 
@@ -50,7 +33,7 @@ def conv_model(embedding_matrix, text_len, vocab_size):
     merged = []
     for n_gram in range(1, 5):
         gram_branch = ks.layers.Conv1D(filters=100, kernel_size=n_gram,
-                                       padding='valid', activation='relu', strides=1, kernel_regularizer=l1l2_reg)(tweet_encoder)
+                                       padding='valid', activation='relu', strides=1)(tweet_encoder)
         gram_branch = ks.layers.GlobalMaxPooling1D()(gram_branch)
         merged.append(gram_branch)
 
@@ -85,10 +68,10 @@ if __name__ == "__main__":
     res_X, res_y = sm.fit_resample(X_vecs, y)
 
     X_train, X_test, y_train, y_test = train_test_split(
-        res_X, res_y, test_size=0.2, random_state=262)
+        res_X, res_y, test_size=0.2, random_state=42)
 
     X_train, X_val, y_train, y_val = train_test_split(
-        X_train, y_train, test_size=0.25, random_state=262)
+        X_train, y_train, test_size=0.25, random_state=42)
 
 
     vocab = vectorizer.get_vocabulary()
@@ -97,12 +80,12 @@ if __name__ == "__main__":
     embedding_dim = 300
     my_callbacks = [
         ks.callbacks.EarlyStopping(
-            monitor='val_accuracy', patience=5, restore_best_weights=True),
+            monitor='val_acc', patience=3, restore_best_weights=True),
         ks.callbacks.ModelCheckpoint(
             filepath='models/conv_model.{epoch:02d}-{val_acc:.2f}.h5', monitor='val_accuracy', save_best_only=True)
     ]  # ,ks.callbacks.TensorBoard(log_dir='./logs')
-    embedding_matrix = word2vec_matrix_gen(word_index, num_tokens, embedding_dim)
-    model = conv_model(embedding_matrix, MAX_SEQ_LEN, num_tokens)
+    embedding_matrix = embed_matrix_gen(word_index, num_tokens, embedding_dim)
+    model = conv_model(embedding_matrix, MAX_SEQ_LEN, num_tokens, embedding_dim)
 
     model.compile(
         loss="binary_crossentropy", optimizer="adam", metrics=['acc']
